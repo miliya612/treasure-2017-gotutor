@@ -39,19 +39,21 @@ Options
 	}
 
 	url := format(flag.Args()[0])
-	fmt.Println(url)
-	fmt.Println(url.String())
 
 	conHTTP(url.String())
 }
 
 func format(str string) *url.URL {
+
+	// Add http scheme if it is not included in url.
+	// TODO: support https
+	if !regexp.MustCompile(`http://*`).MatchString(str) {
+		str = "http://" + str
+	}
+
 	u, err := url.Parse(str)
 	if err != nil {
 		log.Fatal(err.Error())
-	}
-	if u.IsAbs() {
-		u.Scheme = "http"
 	}
 	return u
 }
@@ -63,17 +65,17 @@ func conHTTP(url string) {
 		log.Fatal(err.Error())
 	}
 
-	// if request payload exists, set Content-Type ""
-	if data != "" {
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	}
-
-	fmt.Println(url)
-
 	client := &http.Client{}
 	h := regexp.MustCompile(`\s*:\s*`).Split(header, 2)
 
-	req.Header.Add(h[0], h[1])
+	if len(h) >= 2 {
+		req.Header.Add(h[0], h[1])
+
+		// if request payload exists, set Content-Type "application/x-www-form-urlencoded"
+		if data != "" && h[0] != "Content-Type" {
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
