@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"net/http"
 
-	"log"
-
 	"io/ioutil"
 
 	"encoding/json"
@@ -21,36 +19,49 @@ type Page struct {
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
-		body := fetchFrom(u)
-		p := extractPage(body)
+		if u == "" {
+			http.Error(w, "url not specified", http.StatusBadRequest)
+			return
+		}
+		err, body := fetchFrom(u)
+		if err != nil {
+			http.Error(w, "request failed", http.StatusInternalServerError)
+			return
+		}
+		err, p := extractPage(body)
+		if err != nil {
+			http.Error(w, "parse failed", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		if err := enc.Encode(p); err != nil {
-			log.Fatal(err)
+			http.Error(w, "encoding failed", http.StatusInternalServerError)
+			return
 		}
 	})
 	http.ListenAndServe(":8080", nil)
 }
 
-func fetchFrom(url string) []byte {
+func fetchFrom(url string) (error, []byte) {
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Fatal(err.Error())
+		return err, nil
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err.Error())
+		return err, nil
 	}
-	return body
+	return nil, body
 }
 
-func extractPage(h []byte) *Page {
+func extractPage(h []byte) (error, *Page) {
 	p := &Page{}
 	doc, err := html.Parse(bytes.NewReader(h))
 	if err != nil {
-		log.Fatal(err)
+		return err, nil
 	}
 
 	var f func(*html.Node)
@@ -73,7 +84,7 @@ func extractPage(h []byte) *Page {
 		}
 	}
 	f(doc)
-	return p
+	return nil, p
 }
 
 func isDescription(s []html.Attribute) bool {
